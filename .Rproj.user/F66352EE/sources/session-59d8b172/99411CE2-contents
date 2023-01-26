@@ -1,0 +1,235 @@
+---
+title: "Austrian GHG Emissions"
+author: "Talis Tebecis"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(data.table)
+pacman::p_load(dplyr)
+pacman::p_load(tidyr)
+pacman::p_load(readxl)
+pacman::p_load(stringr)
+pacman::p_load(gets)
+pacman::p_load(getspanel)
+pacman::p_load(here)
+pacman::p_load(ggplot2)
+pacman::p_load(ggpubr)
+```
+
+## Motivation
+
+I seek to replicate the work of Koch et al. (2022) in *Attributing agnostically-detected large reductions in road CO2 emissions to policy mixes*, applying their 'causes-of-effects' searching method to determine effective emissions-reduction policy mixes across all sectors. I will then focus on the Austrian context to find effective policy mixes, in the context of informing the Climate Plan for Austria.
+
+## Austrian emissions: an exploration
+
+First, I visualise the overall emissions of Austria to explore potential structural breaks in emissions.
+
+```{r, echo=FALSE, fig.height = 6, fig.width = 12}
+emissions_codes <- read.csv("Data/01 Source_data/IPCC 2006 Categories.csv") %>% 
+  select(IPCC, IPCC_description)
+
+data_full <- read.csv("Data/02 Intermediary_data/CO2DriversEU_dataset.csv") %>% 
+  left_join(emissions_codes,
+            by = c("category" = "IPCC")) %>% 
+  filter(!is.na(lemissions_pc))
+
+AUT_emissions <- data_full %>% 
+  filter(country == "Austria") %>% 
+  group_by(year) %>% 
+  summarise(tot_emissions = sum(emissions))
+
+AUT_emissions_pc <- data_full %>% 
+  filter(country == "Austria") %>% 
+  group_by(year) %>% 
+  summarise(tot_emissions_pc = sum(emissions_pc))
+
+plot1 <- ggplot(data = AUT_emissions) +
+  geom_line(mapping = aes(x = year, y = tot_emissions))
+
+plot2 <- ggplot(data = AUT_emissions_pc) +
+  geom_line(mapping = aes(x = year, y = tot_emissions_pc))
+
+ggarrange(plot1, plot2,
+          labels = c("Total emissions for Austria",
+                     "Total emissions per capita for Austria"),
+          ncol = 2,
+          nrow = 1)
+```
+Here, we can see significant variation in Austria's emissions, both upwards and downwards since 1970. In order to determine effective policy interventions to reduce emissions, we must consider emissions at the sectoral level.
+
+\newpage
+
+Thus, I explore the emissions per capita time series plots for all different IPCC Emissions categories. These are based on the 2006 IPCC emissions categories.
+
+```{r, echo=FALSE, fig.height = 6, fig.width = 12}
+ggplot(data = subset(data_full, country == "Austria")) +
+  geom_line(mapping = aes(x = year, y = emissions_pc)) +
+  facet_wrap(~ IPCC_description) +
+  labs(title = "Emissions per capita for Austria",
+       xlab = "Year",
+       ylab = "Emissions per capita") +
+  theme(axis.text = element_text(size = 6))
+```
+
+We can see here that the IPCC categories with the highest emissions for Austria are:
+
+-   Main Activity Electricity and Heat Production
+-   Manufacturing Industries and Construction
+-   Petroleum Refining - Manufacture of Solid Fuels and Other Energy Industries
+-   Road Transportation
+-   Other Sectors, which refers to Fuel Combustion Activities from the Commercial/Institutional, Residential and Agriculture/Forestry/Fishing/Fish Farms sectors.
+
+Next, I explore the variation in the time series by taking the log of per capita emissions and re-plotting the time series. I also allow the scale to vary between charts to see the individual variation in the plots.
+
+```{r, echo=FALSE, fig.height = 6, fig.width = 12}
+ggplot(data = subset(data_full, country == "Austria")) +
+  geom_line(mapping = aes(x = year, y = emissions_pc)) +
+  facet_wrap(~ IPCC_description, scale = "free") +
+  labs(title = "Emissions per capita for Austria",
+       xlab = "Year",
+       ylab = "Emissions per capita") +
+  theme(axis.text = element_text(size = 6))
+```
+
+From this analysis, we can see that there are significant variations in the emissions of all sectors. Thus, I conclude that it is worth evaluating structural breaks in emissions for all sectors for Austria. However, given the relatively large magnitude of the energy and heat, manufacturing and construction, refining, transport and other sectors, I will focus the policy evaluation in these sectors.
+
+\newpage
+
+## Identifying Structural Breaks
+
+I follow the reverse causal approach of Koch et al. (2022) to identify structural breaks in the emissions per capita for each sector, which are not accounted for by changes in population or GDP per capita. I largely replicate the code of the original authors, but I have adjusted the dataset creation to account for all sectors, and have written a for-loop to iterate the process over all sectors and save the output accordingly.
+
+I provide the code here for reference. Not,e, this takes a number of hours to execute. Also note, the "IPCC 2006 Categories" data is not in the original source code, and I have created this table based on the 2006 IPCC guidelines.
+
+```{r, eval = FALSE}
+# Setup ----------------------------------------------------------------
+
+#import data
+data_full <- read.csv("Data/02 Intermediary_data/CO2DriversEU_dataset.csv")
+
+#Group specification
+EU15 <- c("Austria", "Belgium", "Germany", "Denmark", "Spain", "Finland",
+          "France", "United Kingdom", "Ireland", "Italy", "Luxembourg", 
+          "Netherlands", "Greece", "Portugal", "Sweden")
+EU16 <- c("Croatia", "Bulgaria", "Cyprus","Czech Republic", "Estonia", 
+          "Hungary", "Lithuania", "Latvia", "Malta", "Poland", "Romania", 
+          "Slovak Republic", "Slovenia", "Switzerland", "Iceland", 
+          "Norway")
+EU31 <- c(EU15, EU16)
+
+#IPCC categories
+emissions_codes <- read.csv("Data/01 Source_data/IPCC 2006 Categories.csv") %>% 
+  select(IPCC)
+
+categories <- read.csv("Data/01 Source_data/IPCC 2006 Categories.csv") %>% 
+  select(IPCC_description)
+
+# Analysis ----------------------------------------------------------------
+
+#run loop over all variables to produce results for all IPCC categories
+for(IPCC_code in 1:23){
+  
+  #set IPCC code and category
+  emissions_code <- emissions_codes[IPCC_code,]
+  emissions_category <- categories[IPCC_code,]
+  
+  #set up document
+  file_name <- paste0("Data/03 Output_data/",emissions_category)
+  
+  #filter data
+  data <- data_full %>% 
+    filter(category == emissions_code) %>% 
+    select(-category)
+  
+  #add lags
+  data <- as.data.table(data)
+  data[, L1.lemissions:=c(NA, lemissions[-.N]), by="country"]
+  data[, L1.lgdp:=c(NA, lgdp[-.N]), by="country"]
+  data[, L1.lpop:=c(NA, lpop[-.N]), by="country"]
+  data[, L1.lemissions_pc:=c(NA, lemissions_pc[-.N]), by="country"]
+  
+  # Heterogenous effects preparation
+  group.interactions <- c("lgdp_EU15", "lgdp_EU16", "lgdpsq_EU15", "lgdpsq_EU16",
+                          "lpop_EU15", "lpop_EU16")
+  data$lgdp_EU15 <- data$lgdp * (data$country %in% EU15)
+  data$lgdp_EU16 <- data$lgdp * (data$country %in% EU16)
+  data$lgdpsq_EU15 <- data$lgdp_sq * (data$country %in% EU15)
+  data$lgdpsq_EU16 <- data$lgdp_sq * (data$country %in% EU16)
+  data$lpop_EU15 <- data$lpop * (data$country %in% EU15)
+  data$lpop_EU16 <- data$lpop * (data$country %in% EU16)
+  
+  #results document header
+  cat(
+    paste0(
+      "#################################################################### \n",
+      "#                                                                  # \n",
+      "#                 CO2 DRIVERS EU - ANALYSIS                        # \n",
+      "#                                                                  # \n",
+      "#################################################################### \n",
+      "\n \n \n"),
+    file = file_name
+  )
+  
+  # Analysis
+  for(group in 1:2){
+    
+    # Prepare sample and data
+    sample <- list(EU15, EU31)[[group]]
+    dat <- filter(data, country %in% sample, year>=1995)
+    
+    # Print Sample Header
+    cat(
+      paste0(
+        "############################## \n",
+        "#  SAMPLE = EU", length(sample), " \n",
+        "############################## \n",
+        "\n \n "),
+      file = file_name,
+      append = T
+    )
+    
+    for(p.value in c(.05, .01, .001)){
+      
+      # Break analysis:
+      is <- isatpanel(
+        data = dat,
+        formula = ifelse(
+          group == 1, "lemissions_pc ~ lgdp + lgdp_sq + lpop",
+          paste0(
+            "lemissions_pc ~ ", 
+            paste(group.interactions, collapse = " + ")
+          )
+        ) %>% as.formula,
+        index = c("country", "year"),
+        effect = "twoways",
+        iis = T,
+        fesis = T, 
+        t.pval=p.value
+      )
+      
+      # Print analysis results
+      cat(
+        paste0(
+          " \n ###########################", 
+          " \n # p-value: ", p.value,
+          " \n \n "), 
+        file = file_name, 
+        append = T)
+      
+      sink(file_name, append=T)
+      print(is)
+      sink()
+      
+      cat(" \n \n \n \n \n", 
+          file = file_name, 
+          append = T)
+    }
+  }
+}
+
+```

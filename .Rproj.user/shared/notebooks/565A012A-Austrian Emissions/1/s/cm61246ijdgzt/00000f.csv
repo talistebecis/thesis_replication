@@ -1,0 +1,7 @@
+"0","ggplot(data = subset(data_full, country == ""Austria"")) +"
+"0","  geom_line(mapping = aes(x = year, y = emissions_pc)) +"
+"0","  facet_wrap(~ IPCC_description, scale = ""free"") +"
+"0","  labs(title = ""Emissions per capita for Austria"","
+"0","       xlab = ""Year"","
+"0","       ylab = ""Emissions per capita"") +"
+"0","  theme(axis.text = element_text(size = 6))"

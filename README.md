@@ -1,2 +1,0 @@
-# thesis_replication
-thesis_replication

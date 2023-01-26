@@ -1,0 +1,1396 @@
+---
+title: "Data Wrangling Notebook"
+subtitle: "Data Science and Machine Learning 1915 & 1827"
+date: "10 2022"
+author: Max Thomasberger
+output: 
+  github_document:
+    pandoc_args: --webtex
+    toc: true
+    toc_depth: 2
+    #toc_float: true
+    number_sections: true
+editor_options: 
+  chunk_output_type: inline
+bibliography: ./art/literature.bib
+---
+
+
+```{r setup, include=FALSE}
+
+# deletes all objects from the environment
+rm(list=ls())
+
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(fig.align = 'center')
+
+# you will have to install the pacman package first:
+
+# install.packages("pacman")
+
+
+pacman::p_load(tidyverse, 
+              openxlsx,
+              nycflights13,
+              broom,
+              here,
+              DT,
+              kableExtra,
+              countrycode)
+
+source(here("01_Data_Wrangling","code","@@@_functions.R"))
+
+```
+
+
+# Intro
+
+Note that we are using Tidyverse Version > 1.3.0 in this notebook. Please update to this version if you have an older version installed. Some of the synthax presented here wont work with older versions (pivot_longer and pivot_wider). You will also have to install all the packages in the setup chunk above.
+
+As mentioned before the main ressource for thtis part is R for datascience by @hadley2020. You can find i for free at: https://r4ds.had.co.nz/
+
+```{r, echo=FALSE, out.width="30%", fig.cap="Get it for free at: https://r4ds.had.co.nz/"}
+knitr::include_graphics("./art/r4datascience_cover.png")
+```
+
+
+# Project structure 
+
+Lets first talk about how to set up projects. In this coursse you will have to collaborate with your colleagues on a data-science project/paper. Here are some recommendations for setting up a R-project for collaboration.
+
+If I see something like this in your code you will **loose** points:
+
+```{r echo = T, results = 'hide',eval=FALSE}
+
+setwd("Y:/path/to/a/directory/on/my/computer/projectdir")
+```
+
+To make collaboration easier We want to use **relative paths** wherever possible. This way it does not matter where the R-Scripts and the data is located in the file system and it does not matter wether the Operating System uses Drive letters (like Windows) or mounting points (like Mac OS or Linux). 
+
+## Absolute vs relative Paths
+
+
+| Absolute Path 	| Relative Path 	|
+|---	|---	|
+| Points to a specific location in the file system. Irrespective of the current working directory. 	| Points to the location of a directory using the current directory as a reference 	|
+| It is also referred to as full path or file path 	| Also known as non-absolute path 	|
+| It refers to the location of a file or directory (filesystem) relative to the root directory in Linux. 	| Refers to the location of a file or directory (filesystem) relative to the current directory 	|
+| Absolute URLs are used to link to other websites that are not located in the same domain 	| Relative URLs are used to link to other websites that are located on the same domain 	|
+| For example: If your pics are in C:\rproject1\pics and the Rproject file is in C:\rproject1 the absolute path for pictures is C:\rproject1\pics 	| For example: If your pics are in C:\rproject1\pics and the Rproject file is in C:\rproject1 the relative path for pictures is ..\pics 	|
+[Source]( http://www.differencebetween.net/technology/difference-between-absolute-and-relative-path/)
+
+## How to use relative Paths in R
+
+To create a point of reference with an .Rproj file, we create a R project via the R-Studio GUI:
+
+```{r, echo=FALSE, out.width="100%",fig.align="center"}
+
+knitr::include_graphics("./art/create_project.PNG")
+```
+
+These steps will create a project directory and a .Rproj file inside the directory. All file paths can now be entered "relative" to the directory where the .Rproj file resides by entering a "." to indicate the "root" directory of the R-project.
+
+```{r echo = T, results = 'hide',eval=FALSE}
+
+a_data_frame <- read_csv("data_file.csv")
+
+another_data_frame <- read_csv(file.path(".","sub_directory","another_data_file.csv"))
+
+yet_another_data_frame <- read_csv(here("sub_directory","yet_another_data_file.csv"))
+
+```
+
+
+For more complicated project structures with multiple directories containing code,  Rmarkdown files and input data, building relative paths that work can become cumbersome. It is also hard to keep track of filesystem conventions that work on multiple machines.
+
+To simplify  package "here" can be used to construct file paths. The package will use a set of heuristics to create an absolute path relative to your R-project structure. The resulting path will work on Windows and Mac Os.
+
+It is very handy if your Rmarkdown files do not live in the root of the project directory since Rmarkdown has the
+very annoying habit of assuming that the file itself is located in the root of the Project dir which makes loading data from different subdirectories very cumbersome. The here package solves this very conveniently.
+
+Note that it is officially only for "interactive" use, but I find it works just well for knitting HTML and md files.
+
+```{r echo = T, results = 'hide',eval=T}
+here("sub_directory","another_data_file.csv")
+
+```
+
+
+
+
+```{r, echo=FALSE, out.width="70%",fig.align="center"}
+knitr::include_graphics("./art/rproject.png")
+```
+
+
+## Small to medium projects
+
+If you are working alone on a small to medium sized project (like your masters thesis) a project structure like this is recommended:
+
+
+```{r, echo=FALSE, out.width="70%",fig.align="center"}
+knitr::include_graphics("./art/project_stucture.PNG")
+```
+
+* The data folder is where you all your input data resides
+* The code folder is where you save the R-scripts
+* The output folder is where you save all the outputs
+
+Careful: if your data is bigger than > 100MB you cannot commit it to Github without additional work (i.e. Git LFS). 
+
+
+## Medium to big sized projects
+
+If you are collaborating on a medium to big project (data > 100 MB) using a version control system like GitHub you should separate the code of the R-project from the data. This is also good practice if the data is confidential and must not leave the computers or the premises of your workplace. In a bigger workplace your data might also be stored in a database or on a file server. If there are passwords needed to access these data it is **very** important to store these secrets locally and not on github. 
+
+In case of a file server the drive letters or mount points will be standardized by the IT-department so that they wont change between the computers of your collaborators. So you could in theory use these drive letters in your code but it still makes sense to abstract from these letters and the file locations on the server with a function in your code. Otherwise you'd have to edit all of your scripts if the IT department decides to change the letters or moves a share (anectodally I can assure you that this does not happen very often because the IT guys know how much pain this usually causes).
+
+We don't have an IT department in this course (I will **not** fix your computer and you will have to figure out on your own how to colaborate as it is good for your character). This means collaboration between your group members will likely happen via a cloud solution like dropbox. I recommend the following shared directory structure for the project on dropbox.
+
+
+```{r, echo=FALSE, out.width="70%",fig.align="center"}
+knitr::include_graphics("./art/dropbox_folders.PNG")
+```
+
+* The input_data folder is where you all your input data resides
+* The intermediary_data is where all the intermediary steps are saved
+* The output folder is where you save all the final outputs of the model
+
+Of course you can have more subdirectories in this structure to make things even more organized.
+
+The R-project directory (which will be managed by a  version control software like github) should still have a **code** directory to keep things tidy. You can also include other directories in there if it helps to organize the project. But be mindful that github is for **code** and not for data. If you absolutely have to have data in here make sure it is in the gitignore file to prevent a synchronization.
+
+
+```{r, echo=FALSE, out.width="70%",fig.align="center"}
+knitr::include_graphics("./art/github_rproject.PNG")
+```
+
+
+You will now have to abstract the absolute path to the dropbox in your code. This is necessary because every dropbox installation location of each project team member will have a different path. 
+
+I provided the function dropboxpath() that creates (semi-reliantly) absolute file paths to the dropbox folder (Win & Mac). If somebody wants to use Linux it is their own responsibility to make this as painless as possible for your team members. 
+
+Note that I am using the base-R command "file.path" here to construct a path. This is the recommended way to create path strings that reliantly work on multiple operating systems. As you can see the resulting path does not use single "backslashs" as customary on paths in windows but double backslashs and "forward slashs". This is necessary because the single backslash is a reserved character in R. It has to be "escaped" by another backslash to work.
+
+
+```{r echo=T,eval=T, include=TRUE}
+# The dropboxpath() function has NOT been tested thoroughly. 
+# If it spits out an error and the rmarkdown file wont compile please comment the command below
+
+file.path(dropboxpath(),"A_good_project_title","input_data")
+```
+
+## File names for scripts
+
+* Exploit the standard file name ordering to organize your project
+* Save your functions in separate scripts
+* Use good names for your scripts. It should be already clear what they do from the name
+* Use a master script to call the scripts in the right order and to document what they do
+
+```{r, echo=FALSE, out.width="70%",fig.align="center"}
+knitr::include_graphics("./art/script_names.PNG")
+```
+
+
+# Importing Data
+
+```{r, echo=FALSE, out.width="60%", fig.cap="Phases of a typical data science project (R for data science)"}
+knitr::include_graphics("./art/data-science-wrangle.png")
+```
+
+## CSV Files
+
+For social science related work the most important file formats are (still) CSV files and excel files.
+
+CSV (comma separated values) files are text file based data format for tabular data. They have no data compression and are a quite inefficient way to store and share data but they are still widely used. They look like this if you open them in a text editor:
+
+
+```{r, echo=FALSE, out.width="50%"}
+knitr::include_graphics("./art/csv_file.PNG")
+```
+
+CSV files come in two flavors:
+
+* International files (use commas as separator)
+* European files (use points as separator)
+
+I recommend tidyverses read_csv() and read_csv2() over their Base-R counterparts because of their speed and realiability. For international CSVs use: **read_csv()** and for european CSVs (the separator character is a point) use: **read_csv2()**
+
+There are many other text based formats see "R for data science" for more information. 
+
+Lets now read in the file "measles_lev1.csv" in the data folder (data file sourced from [here]( https://github.com/royfrancis/royfrancis.github.io/blob/master/a-guide-to-elegant-tiled-heatmaps-in-r/measles_lev1.csv)). As you can see this CSV file isn't read in correctly, because the first two lines are meta-data not the column names:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+measles <- read_csv(
+  here("data",
+       "measles_lev1.csv")
+  )
+
+head(measles)
+
+```
+
+Even if it is tempting: 
+
+> **DO NOT OPEN THE CSV FILE IN EXCEL OR A TEXT EDITOR TO DELETE THESE LINES**!
+
+We want to make every data wrangling step **reproducible**. Klicking around in Excel is not easily reproducible. If you have to re-run all of your code at some point (and this will happen) you **WILL** forget crucial data-wrangling steps. 
+
+> **EACH** data-wrangling step **should be done in R** and the **source data should be left UNTOUCHED**. 
+
+Trust me, it is possible.
+
+In our case we simply have to tell the package to skip the first two rows:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+measles <- readr::read_csv(
+  here("data","measles_lev1.csv"),
+  skip = 2)
+
+head(measles)
+
+```
+
+
+## Excel files
+
+Excel files are still one of the most widely used data formats for tabular data. You **will have to be able** to work with them.
+
+Fortunatlely the underlying data-format has been standardized by Microsoft a few years ago. It is now quite easy to generate and read in excel files.
+
+There are two packages I recommend for handling excel files: openxlsx and readxl. If you also have to write excel files you should use openxlsx tho readxl is slightly faster for big tables.
+
+Again: **do not edit** your input data in Excel. We want to leave our input data as untouched as possible and document each data wrangling step in our code. 
+
+## A real world example:
+
+We now want to read in the [billateral remittances matrix](https://www.worldbank.org/en/topic/migrationremittancesdiasporaissues/brief/migration-remittances-data) from the World Bank. It shows how much money migrants send back home to their families per year for all countries of the world.
+
+Again the data isn't read in correctly because the first line are not the column names and there are meta data entries at the bottom of the matrix.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+remittances <- readxl::read_xlsx(
+  here("data",
+       "Worldbank",
+       "Remittance_matrix",
+       "bilateralremittancematrix2017Apr2018.xlsx")
+  )
+
+
+remittances <- openxlsx::read.xlsx(
+  here("data",
+       "Worldbank",
+       "Remittance_matrix",
+       "bilateralremittancematrix2017Apr2018.xlsx")
+  )
+```
+
+
+```{r, echo=FALSE, out.width="100%",fig.align="center"}
+knitr::include_graphics("./art/remit_matrix1.PNG")
+```
+
+To solve this we open the file in excel, look at the rows you want to read in and enter them into the package:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+remittances <- openxlsx::read.xlsx(
+  here("data",
+       "Worldbank",
+       "Remittance_matrix",
+       "bilateralremittancematrix2017Apr2018.xlsx"),
+  rows= 2:217)
+
+remittances <- readxl::read_xlsx(
+  here("data",
+       "Worldbank",
+       "Remittance_matrix",
+       "bilateralremittancematrix2017Apr2018.xlsx"),
+  skip=1,
+  n_max=216)
+
+```
+
+# Saving Data
+
+## Saving data the wrong way
+
+It might be tempting to use the save command to save your data in the RData format... After all it is called save. It just makes sense, doesn't it?
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+save(remittances, file=file.path(here("data","01_remittances_raw.RData")))
+
+```
+
+But this is actually a pretty awful way of doing that. The save command has the issue that, if you load the data back into your environment, it will always have the same name as the object it had when you've saved it.
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Remove the remittances object from the environment
+
+rm(remittances)
+
+# there is no way to define which name the loaded object should have in the environment
+# it will be called remittances again
+
+load(file.path(here("data","01_remittances_raw.RData")))
+
+```
+
+
+This is a recipy for disaster and should not be used in complex R-projects.
+
+* If you already have many objects in your environment you wont know which new object was just loaded in.
+* You are bound by the naming scheme of the script/environment the object initially came from.
+* If the name of the object changes in the environment you created it in, you will have to change it in all other scripts that depend on that name. 
+* It is messy and hard to maintain.
+
+## Saving data the right way
+
+A superior way of saving and loading data is the RDS data-format or any other data format that forces you to choose the name of the object you are loading into your environment. The RDS format is especially handy since it can save any R-object, including complex data formats that contain lists like model outputs.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Lets save the remittances object
+
+saveRDS(remittances, file=file.path(here("data","01_remittances_raw.rds")))
+
+```
+
+If we now want to load the object back into the environment we have to actually decide which name the object should have first. This might seem like an unnecessary extra step, but trust me, it is WAY easier to maintain further down the road. 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+# Lets save the remittances object
+
+remittances_raw <- readRDS(file=file.path(here("data","01_remittances_raw.rds")))
+
+```
+
+## File names for saved data
+
+As mentioned above we want the data wrangling to be reproducible. This means that we should make it clear that the cleaned and wrangled data is different from the raw data. I recommend saving the wrangled and cleaned data in the intermediary_data folder and sticking to a very clear naming scheme.
+
+* Use the same prefix for the data as the script it has been created with. This means that the files created by the script "001_prepare_remittances_matrix.R" should be named "001_descriptive_filename.rds"
+  + This makes it immediately clear that the file comes from a data-wrangling step (prefix "00x_")
+  + This immediately identifies the script it has been created with (prefix "001_")
+* If you are not sure yet where the script will be placed in your project flow (maybe you want to insert  scripts before it in the future), you can work with temporary file names (for instance: "00x_remittances_raw.rds") and change them using the "Find in files" tool in Rstudio in a later step.
+
+
+
+# Filtering data & pipes
+
+Lets have a closer look at the remittances matrix. As you can see the first column name is too long and too complicated. And we want to drop the row for WORLD and the column for WORLD.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+# We only show the first 5 column names, because there are so many of them.
+colnames(remittances)[1:5]
+
+```
+
+
+Lets now:
+
+* Rename the first column to a more sensible name. 
+* Exclude the row for "WORLD"
+* Exclude the column for "WORLD"
+
+## The stupid way
+
+There are many ways of achieving this. I will show you two of them using Base-R synthax and chaining commands together using magrittr. 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+# create tible from data frame
+cleaned_remittances0 <- as_tibble(remittances)
+
+# First we rename the first column of the remittances object 
+# and save this into a new  object
+cleaned_remittances1 <- rename(cleaned_remittances0, name_o = 1)
+
+# then we filter this new object to exclude the 
+# row containing the string "WORLD" in the first column
+
+cleaned_remittances2 <- filter(cleaned_remittances1, name_o != "WORLD")
+
+# Then we exclude the column "WORLD"
+
+cleaned_remittances3 <- select(cleaned_remittances2, -WORLD)
+
+```
+
+We just created four new objects, using up precious RAM, just because we did a few simple wrangling steps. We could of course also overwrite the original "remittances" object in each wrangling step, but this is **HARD** to debug, trust me! You will forget which steps already have been executed and the whole overwriting objects in each step aproach is a big mess.
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+# create tible from data frame
+cleaned_remittances <- as_tibble(remittances)
+
+# First we rename the first column of the remittances object 
+# and save this into a new  object
+cleaned_remittances <- rename(cleaned_remittances, name_o = 1)
+
+# then we filter this new object to exclude the 
+# row containing the string "WORLD" in the first column
+
+cleaned_remittances <- filter(cleaned_remittances, name_o != "WORLD")
+
+# Then we exclude the column "WORLD"
+
+cleaned_remittances <- select(cleaned_remittances, -WORLD)
+
+```
+
+## The clever way
+
+This is why the tidyverse way is to chain data wrangling commands together with the pipe operator: %>% You can automagically insert it via the R-Studio shortcut Ctrl + Shift + M (Windows)
+
+This makes the datawrangling flow much more intuitive, more readable and more easy to debug, although it takes some time to get used to. It is tempting to chain endless commands together but as a rule of thumb you should stop after 10 - 15 wrangling steps and create a new object.
+
+In my opinion the embrace of piping is one of the main reasons why the tidyverse shines and is so widely adapted. It seems as if the R-consortium agrees with this! Since R Version 4.10 Base-R (yes!) also features a native pipe operator: |> 
+
+It is possible to switch the shortcut above in R-Studio. Right now I have limited experience with the new syntax, therefore I wont go into it in detail. Initial Benchmarks show that it is marginally faster than magrittr. The new native pipe probably wont be adapted widely for a while because usually the R versions in production aren't the newest one and production code might break at unexpected places. In the end of the day the old software dev saying holds: "Premature optimization is the root of all evil". 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+# First we rename the first column of the remittances object 
+# and save this into a new  object
+
+cleaned_remittances <- remittances %>%
+  #create tible from data frame
+  as_tibble() %>%
+  #Rename the first column
+  rename(name_o = 1) %>%  
+  #Filter rows to exclude the string "WOLRD"
+  filter(name_o != "WORLD") %>%  
+  #Drop the column named "WORLD"
+  select(-WORLD) 
+
+```
+
+Another handy operator is the %in% operator. Use this for instance to filter for several countries:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+# First we rename the first column of the remittances object 
+# and save this into a new  object
+cleaned_remittances_small <- remittances %>%
+  #Rename the first column
+  rename(name_o = 1) %>%  
+  #Filter rows only for Austria and Germany
+  filter(name_o %in% c("Austria","Germany")) %>%  
+  #Select cols for Austria and Germany
+  select(c("name_o","Austria","Germany")) 
+
+cleaned_remittances_small
+```
+
+The filter command can be used with a bunch of other boolean operations. Heres a handy graphic for the synthax, taken from [R for datascience](https://r4ds.had.co.nz/transform.html). Please use the respective chapter as reference
+
+This part is inspired by the "tidy data" chapter in [R for datascience](https://r4ds.had.co.ence when you need to filter your datasets for your homework assignments.
+
+
+```{r, echo=FALSE, out.width="60%",fig.align="center"}
+knitr::include_graphics("./art/transform-logical.png")
+```
+
+
+# Tidy data and creating variables
+
+Please read the chapter if you don't get what we are talking about here. We will go beyond the toy datasets presented there and look at some real-world datasets.
+
+## Wide vs. Long data
+
+As you can see below the same data can be represented in different tabluar structures.
+
+```{r, echo=FALSE, out.width="60%", fig.cap="source: http://jonathansoma.com/tutorials/d3/wide-vs-long-data/"}
+knitr::include_graphics("./art/wide_vs_long.PNG")
+```
+
+It is often neccessary to reshape (pivot) the data from wide to long or vice versa. Especially time series excel files are represented in wide format (for instance Eurostat time series). R packages usually prefer "long" data, this format is especially important for using the tidyverse. The reason behind this is that is is much easier/efficient to work with "vectorized" functions. This is how R can flex its muscles. Functions usually operate on all elements of a vector. It is not necessary to loop row-wise through your data using an index and act on each element of the respective vector. 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+# two examples of vectorization
+
+c(1,2,3) + c(1,2,3)
+
+dat <- data.frame(x = c(1,2,3),
+           y = c(1,2,3)) %>%
+  mutate(z = x + y)
+
+dat
+
+
+# this is stupid! don't do it:
+# look how much code we need and how hard it is to read and understand...
+
+for(i in 1:nrow(dat)){
+  
+  dat$z2[i] <- dat$x[i] + dat$y[i]
+  
+}
+
+dat$z3 <- dat$x + dat$y
+
+dat
+
+```
+
+
+## Rules for tidy data
+
+1. Each variable must have its own column.
+2. Each observation must have its own row.
+3. Each value must have its own cell.
+
+These three rules are interrelated because it’s impossible to only satisfy two of the three. That interrelationship leads to an even simpler set of practical instructions:
+
+* Put each dataset in a tibble (data frame).
+* Put each variable in a column.
+
+```{r, echo=FALSE, out.width="100%", fig.cap="source: https://r4ds.had.co.nz"}
+knitr::include_graphics("./art/tidy-1.png")
+```
+
+## Which of these toy datasets are tidy?
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+table1  
+
+table2  
+
+table3  
+```
+
+## Creating Variables: mutate()
+
+But why should we bother reshaping our data?
+
+Because we can use vectors (columns) as arguments in our function. Here an example what I mean by this.
+
+The mutate command is used to create new columns in dplyr, you can simply use the column names of the original dataset without bothering naming the original data frame if it is used in conjunction with the magrittr pipe %>%. This is also called "lazy evaluation" it is super useful for data wrangling but can become a bit cumbersome when programming functions.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+# The base Base R way is also "VECTORIZED" you can do an easy cell by cell operation by using whole column vectors
+
+table1$cases_per_capita <- table1$cases / table1$population
+
+table1
+
+# the Base R synthax is a bit redundant because you have to mention the object everytime to identify the vectors for th operations
+
+# The TidyR synthax is a lot more succint for the same operation
+# Here the mutate() function is used to create a new column in the table1 object
+
+# You can use virtually every function that accepts vectors als arguments. 
+# If you use basic math the operations are elementwise
+
+table1 %>%
+  mutate(cases_per_capita = cases/population)
+
+
+# It is super easy is to string together a chain of data wrangling 
+# and visualization steps without bothering to save intermediary object in RAM
+# This is useful for one-off tables or quick visualizations
+
+table1 %>% 
+  mutate(cases_per_capita = cases/population) %>%
+  ggplot() +
+  aes(x=factor(year), y= cases_per_capita, fill = country) +
+  geom_col(position = "dodge")
+```
+
+
+## Pivoting
+
+Pivoting is super important. I use it daily but I also have to look up the synthax daily. 
+
+This is A-OK. Nobody expects you to memorize synthax although you will remember it on your own at some point (or not). But you do have to be able to solve problems using the help and google. 
+
+### Wide to long
+
+Time series are often in "wide" format. To reshape the data into "long" format we use the "pivot_longer()" function:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+table4a  
+
+
+table4a %>% 
+  pivot_longer(
+               # select which columns should be pivoted
+               cols = c(`1999`, `2000`), 
+               
+               # how should the variable for the cols be named?
+               names_to = "year", 
+               
+               # how should the variable for the cells of the matrix be named?
+               values_to = "cases")
+
+# slightly less cumbersome syntax:
+table4a %>% 
+  pivot_longer(
+               # select which columns should be pivoted by excluding the country column
+               cols = c(-country), 
+               
+               # how should the variable for the cols be named?
+               names_to = "year", 
+               
+               # how should the variable for the cells of the matrix be named?
+               values_to = "cases")
+
+```
+
+```{r, echo=FALSE, out.width="100%", fig.cap="Wide to long, source: https://r4ds.had.co.nz"}
+knitr::include_graphics("./art/tidy-9.png")
+```
+
+### Long to wide
+
+The opposite direction is done by the "pivot_wider()" function. 
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+table2  
+
+
+table2 %>%
+    pivot_wider(
+      
+      # from which variable should the new column names be taken from
+      names_from = type, 
+      
+      # from which variable should the values be taken from
+      values_from = count)
+
+```
+
+
+```{r, echo=FALSE, out.width="100%", fig.cap="Long to wide, source: https://r4ds.had.co.nz"}
+knitr::include_graphics("./art/tidy-8.png")
+```
+
+
+## A real World Example
+
+Is the remittances matrix tidy?
+
+**No!** The columns represent the same variable. To make it tidy we have to pivot it from "wide" to "long" format.
+
+We realize that several columns aren't numeric variables but character variables, this will lead to troubles while pivoting. Reading in the excel table did not work perfectly. 
+
+1. Lets first grab all the cloumns names that aren't numerical into a vector:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+character_cols <- remittances %>%
+  
+  # select all columns that are character variables
+  select_if(is.character) %>%
+  
+  # drop the first column because we don't need it
+  select(-1) %>%
+  
+  # create a vector containing the column names
+  colnames()
+  
+character_cols
+
+```
+
+We now include two more steps into our data wrangling chain. 
+
+2. We convert the character columns to numerical columns and
+3. pivot the remittances matrix into "long" format. 
+
+Now every variable has its own column.
+
+Note that this results in a **MUCH** larger dataset than the original matrix. Storing data in this way is not efficient but it has huge benefits for running models or do calculations with it.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+# First we rename the first column of the remittances object 
+# and save this into a new  object
+cleaned_remittances <- remittances %>%
+  
+  #Rename the first column
+  rename(name_o = 1) %>%  
+  
+  #Filter rows to exclude the string "WORLD"
+  filter(name_o != "WORLD") %>%
+  
+  #Drop the column named "WORLD"
+  select(-WORLD) %>% 
+  
+  #We now convert all character cols to numeric
+  mutate_at(character_cols, as.numeric) %>% 
+  
+  # Pivoting
+  pivot_longer(
+               #new variable name for the col names
+               names_to =  "name_d", 
+               #new variable name for data in the cells
+               values_to = "remit",  
+               #we want to pivot all the columns BUT the first
+               cols = -name_o) %>%
+  
+  # Drop all missing values from remit column
+  filter(!is.na(remit))
+
+
+dim(remittances)
+
+dim(cleaned_remittances)
+
+cleaned_remittances
+
+```
+
+
+# Joins
+
+The examples in this part are taken almost in verbatim from the excellent "relational data" chapter in [R for datascience](https://r4ds.had.co.nz/relational-data.html). I strongly suggest to read the chapter if you don't get what we are talking about here. We will also go beyond the toy datasets presented in the book and look at some real-world datasets.
+
+Lets have a look at the data in the nycflights13 library and think about Keys.
+
+Keys are variables that connect pairs of tables.  
+
+* Imagine you wanted to draw (approximately) the route each plane flies from its origin to its destination. What variables would you need? What tables would you need to combine?
+
+```{r, echo=FALSE, out.width="100%", fig.cap="Flights data relationship, source: https://r4ds.had.co.nz"}
+knitr::include_graphics("./art/relational-nycflights.png")
+```
+
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+airlines 
+
+airports 
+
+planes 
+
+weather 
+
+flights
+
+```
+
+## Keys
+
+* "A **primary key** uniquely identifies an observation in its own table. For example, planes$tailnum is a primary key because it uniquely identifies each plane in the planes table."
+
+* "A **foreign key** uniquely identifies an observation in another table. For example, flights$tailnum is a foreign key because it appears in the flights table where it matches each flight to a unique plane."
+
+Source: [R for datascience](https://r4ds.had.co.nz/relational-data.html)
+
+
+Is the variable tailnum in the planes object a primary key?
+
+If yes every observation should have its unique key. There are two ways to check that
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+#Base R
+
+planes %>%
+  View()
+
+length(unique(planes$tailnum)) == nrow(planes)
+
+# Tidy 
+planes %>% 
+  count(tailnum) %>% 
+  filter(n > 1)
+
+
+```
+
+With the Base-R approach above is not possible to check if a combination of variables uniquely identifies the observations (unless you create a variable first). Here the count package shines (I strongly recommend to use it often to explore or even summarise your data).
+
+Here an example with the weather object from nycflights13 package:
+
+* How would you solve this issue if you needed a dataset with a primary key?
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+weather %>%
+  View()
+
+weather %>% 
+  
+  count(year, month, day, hour, origin) %>% 
+  
+  filter(n > 1)
+
+weather %>% 
+  filter(year == 2013 & month ==11 & day == 3 & hour == 1)
+
+
+```
+
+
+## Mutating Joins
+
+These are by far the most common joins you will use in your day to day work. The goal here is to create new columns from a new data set in your source dataset. I use "left joins" most of the time but there are many use cases for the other joins.
+
+The set operations underlying the mutating joins can be summarised with these venn diagrams. 
+
+```{r, echo=FALSE, out.width="50%", fig.cap="Joins as set operations, source: https://r4ds.had.co.nz"}
+knitr::include_graphics("./art/join-venn.png")
+
+```
+
+
+But the alternative graphical representation from R for datascience below might be more useful for you because it shows what actually happens in your tables.
+
+```{r, echo=F, out.width="20%", fig.cap="Data sets for join demonstration, source: https://r4ds.had.co.nz"}
+knitr::include_graphics("./art/join-setup.png")
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+x <- tribble(
+  ~key, ~val_x,
+     1, "x1",
+     2, "x2",
+     3, "x3"
+)
+y <- tribble(
+  ~key, ~val_y,
+     1, "y1",
+     2, "y2",
+     4, "y3"
+)
+
+```
+
+
+### Inner Join
+
+The simplest type of join is the inner join. An inner join matches pairs of observations whenever their keys are equal:
+
+```{r, echo=FALSE, out.width="50%", fig.cap="Inner join, source: https://r4ds.had.co.nz"}
+knitr::include_graphics("./art/join-inner.png")
+
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+x %>% 
+  inner_join(y, by = "key")
+
+
+```
+
+### Outer Joins
+
+An inner join keeps observations that appear in both tables. An outer join keeps observations that appear in at least one of the tables. There are three types of outer joins:
+
+* A left join keeps all observations in x.
+* A right join keeps all observations in y.
+* A full join keeps all observations in x and y.
+
+You should use left joins as often as possible.
+
+```{r, echo=FALSE, out.width="50%", fig.cap="Outer joins, source: https://r4ds.had.co.nz"}
+knitr::include_graphics("./art/join-outer.png")
+
+```
+
+
+
+* The default, by = NULL, uses all variables that appear in both tables, the so called natural join. For example, the flights and weather tables match on their common variables: year, month, day, hour and origin.
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+flights2 <- flights %>% 
+  select(year:day, hour, origin, dest, tailnum, carrier)
+
+flights2
+
+
+flights2 %>% 
+  left_join(weather)
+
+```
+
+* A character vector, by = "x". This is like a natural join, but uses only some of the common variables. For example, flights and planes have year variables, but they mean different things so we only want to join by tailnum.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+flights2 %>% 
+  left_join(planes, by = "tailnum")
+
+
+flights2 %>%
+  glimpse()
+
+planes %>%
+  glimpse()
+
+
+flights2 %>% 
+  left_join(planes %>%
+              select(-year), 
+            by = "tailnum")
+
+
+```
+
+* A named character vector: by = c("a" = "b"). This will match variable a in table x to variable b in table y. The variables from x will be used in the output.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+flights2
+airports
+
+flights2 %>% 
+  left_join(airports, c("dest" = "faa")) %>% 
+  left_join(airports,c("origin" = "faa")) %>%
+  colnames()
+
+```
+
+
+
+## Filtering Joins
+
+Filtering joins match observations in the same way as mutating joins, but affect the observations, not the variables. There are two types:
+
+* semi_join(x, y) keeps all observations in x that have a match in y.
+* anti_join(x, y) drops all observations in x that have a match in y.
+
+### Semi Join
+```{r, echo=FALSE, out.width="50%", fig.cap="Outer joins, source: https://r4ds.had.co.nz"}
+knitr::include_graphics("./art/join-semi.png")
+
+```
+
+
+Semi-joins are useful for matching filtered summary tables back to the original rows. For example, imagine you’ve found the top ten most popular destinations:
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+top_dest <- flights %>%
+  count(dest, sort = TRUE) %>%
+  head(10)
+
+top_dest
+
+
+flights %>% 
+  semi_join(top_dest)
+
+
+flights %>%
+  filter(dest==top_dest$dest)
+
+
+```
+
+### Anti join
+
+The inverse of a semi-join is an anti-join. An anti-join keeps the rows that don’t have a match:
+
+```{r, echo=FALSE, out.width="50%", fig.cap="Outer joins, source: https://r4ds.had.co.nz"}
+knitr::include_graphics("./art/join-anti.png")
+
+```
+
+Anti-joins are useful for diagnosing join mismatches. For example, when connecting flights and planes, you might be interested to know that there are many flights that don’t have a match in planes:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+flights %>%
+  anti_join(planes, by = "tailnum") %>%
+  count(tailnum, sort = TRUE)
+
+```
+
+
+## A real world example
+
+
+Suppose we want to test the hypothesis that remittance flows can be explained by a basic gravity specification as suggested by @McCracken2017 and @Ahmed2016. 
+
+$$\ln R_{ij} = \beta_1 \ln GDP_{i} +  \beta_2 \ln GDP_{j} + \delta \ln d_{ij} + \sum_{k=1}^p \theta_k x_{k,ij} + \nu_{ij}$$
+
+where (logged) remittances from country $i$ to country $j$ ($R_{ij}$) are assumed to depend on the GDP level of the origin and destination country ($GDP_{i}$ and $GDP_{j}$),on mobility and transaction costs proxied by the distance between the two countries ($d_{ij}$) and other factors, captured by the $x_{k,ij}$ covariates
+
+
+To test this hypothesis we need to join a distance data set as well as the origin GDP per capita and the destination GDP per capita to the cleaned remittances data set we created before.
+
+* The "dyadic" distance dataset between countries is sourced from the [CEPII GeoDist database](http://www.cepii.fr/cepii/en/bdd_modele/presentation.asp?id=6)
+
+
+* The GDP per capita dataset is sourced from the [World Development Indicators](http://datatopics.worldbank.org/world-development-indicators/)
+
+
+### Reading in and cleaning GDP Data
+
+As you can see the CSV file the World Bank provided can't be parsed correctly because of a missing column name.
+
+```{r, echo=T}
+
+indicators <- c("NY.GDP.PCAP.CD") #GDP per capita (current US$))
+
+unzip(here("data","Worldbank","World_Development_Indicators","WDI_csv.zip"),
+      files="WDIData.csv",
+      #exdir="./data/rds",
+      exdir=tempdir(),
+      junkpaths=TRUE)
+
+
+wdi <- read_csv(file.path(file.path(tempdir(),"WDIData.csv")))
+
+```
+
+
+Lets drop the missing column name and filter for the indicator we are actually interested in.
+
+
+```{r, echo=T}
+
+wdi <- read_csv(file.path(file.path(tempdir(),"WDIData.csv"))) %>%
+  filter(`Indicator Code` %in% indicators) %>%
+  select(-...66)
+
+```
+
+
+As you can see the dataset is in wide format. So we have to make it "tidy" first. This means we need a column for the year variable.
+
+```{r, echo=T}
+
+head(wdi)
+
+wdi_long <- wdi %>%
+  # pivoting all columns starting from column 5
+  # since we already filtered for our indicator above we can name the value gdp_pc
+  pivot_longer(names_to = "year",
+               values_to = "gdp_pc",
+               cols = 5:ncol(wdi)) %>%
+  
+  #filter for the year of the remittances matrix
+  filter(year == 2017) %>%
+  
+  # Drop unwanted columns
+  select("Country Name", "gdp_pc") %>%
+  
+  # Drop NAs
+  
+  filter(!is.na(gdp_pc))
+
+head(wdi_long)
+```
+
+Lets check how many Country Names in the Remittances Matrix are missing in the World Development Indicators:
+
+```{r, echo=T}
+
+missing_countries <- cleaned_remittances %>%
+  
+  # the anti join only keeps the variables in the remittances matrix that are not contained in the WDI dataset
+  anti_join(wdi_long, by=c("name_o"="Country Name")) %>%
+  
+  # if there are no grouping variables, the summarise output will have a single row summarising all     observations in the input.
+  # In our case we want the unique values of the name_o variable
+  summarise(missing = unique(name_o))
+
+
+missing_countries
+
+```
+
+As you can see there are 22 countries missing. Many of those countries are small or in which the GDP data would be pretty questionable anyways. Therefore we will exclude them from our remittances matrix befeore we join the data.
+
+
+```{r, echo=T}
+
+cleaned_remittance_dataset <- cleaned_remittances %>%
+  
+  # drop the missing countries
+  filter(! name_o %in% missing_countries$missing) %>%
+  filter(! name_d %in% missing_countries$missing) %>%
+  
+  # join the gdp data by the origin variable and rename it
+  left_join(wdi_long, by=c("name_o" = "Country Name")) %>%
+  rename(gdp_o = gdp_pc) %>%
+  
+  # join the gdp data by the destination variable and rename it
+  left_join(wdi_long, by=c("name_d" = "Country Name")) %>%
+  rename(gdp_d = gdp_pc)
+
+
+
+head(cleaned_remittance_dataset)
+
+
+```
+
+### Reading in and joining the distance dataset
+
+
+Now lets load in the distances dataset from CEPII. As you can see there are no country names in the dataset but 3-letter Iso country codes. We have to translate them somehow.
+
+```{r, echo=T}
+
+distances <- readxl::read_excel(here("data","CEPII","dist_cepii.xls"))
+
+head(distances)
+
+```
+
+A handy solution for this hassle is the countrycode package. It is basically a collection of tables for all kinds of country codes and names.
+
+
+```{r, echo = T}
+cleaned_remittance_dataset <- cleaned_remittances %>%
+  
+  # drop the missing countries
+  filter(! name_o %in% missing_countries$missing) %>%
+  filter(! name_d %in% missing_countries$missing) %>%
+  
+  # join the gdp data by the origin variable and rename it
+  left_join(wdi_long, by=c("name_o" = "Country Name")) %>%
+  rename(gdp_o = gdp_pc) %>%
+  
+  # join the gdp data by the destination variable and rename it
+  left_join(wdi_long, by=c("name_d" = "Country Name")) %>%
+  rename(gdp_d = gdp_pc) %>%
+  
+  # lets create the iso3 country codes with the country code package
+  mutate(iso_o = countrycode(name_o,
+                               origin = "country.name",
+                               destination = "iso3c",
+                               custom_match = c("Kosovo" = "KSV")),
+         iso_d = countrycode(name_d,
+                               origin = "country.name",
+                               destination = "iso3c",
+                               custom_match = c("Kosovo" = "KSV"))) %>%
+  
+  # now join the dataset with the distance dataset
+  left_join(distances,by=c("iso_o"="iso_o","iso_d"="iso_d")) %>%
+  
+  # lets drop the missing values
+  
+  filter(!is.na(dist))
+
+```
+
+### Lets test the hypothesis
+
+Okay we can now test our hypothesis:
+
+```{r}
+
+lm(log(remit + 1) ~ log(gdp_o) + log(gdp_d) + log(dist) + 
+               contig + colony + comlang_off, 
+   data= cleaned_remittance_dataset) %>%
+  summary()
+
+
+```
+
+
+
+
+# Split Apply Combine
+
+One of the most common operations in data wrangling is the so called "split apply combine" strategy. It subsets the data according to a factor variable and applies a function to each subset. You can apply all kinds of functions to the subsets, even your own, but it is usually necessary that these functions take a vector (or matrix) as argument and result in a scalar (note that the result could also be a list object like a model but this is beyond the scope of this course).
+
+The most common functions your boss will ask you to use are the sum() function and the mean() function. 
+
+
+```{r, echo=FALSE, out.width="60%"}
+knitr::include_graphics("./art/split_apply_combine.png")
+```
+
+
+## mean()
+
+The dplyr synthax for this operation is group_by (equivalent to split) and summarise (equivalent to apply).
+
+Remember the weather dataset from above? Lets try to find the average tempearature per month. 
+
+Note that one mean is missing in the result. This is because R does not like NAs
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+weather %>%
+  
+  #Split
+  group_by(month) %>% 
+  
+  #Apply mean function and combine to variable average_temp
+  summarise(average_temp = mean(temp))
+
+
+# Lets omit the missing tempearture in August
+
+
+mean_temps <- weather %>%
+  
+  #Split
+  group_by(month) %>% 
+  
+  #Apply  mean function and combine to variable average_temp
+  summarise(average_temp = mean(temp, na.rm=T))
+
+
+mean_temps
+  
+
+```
+
+
+This operation should be **VERY** familiar to you since you all had several econometrics classes by now. We simply estimated the conditional expectation per month (remember: in the limit the arithmetic mean converges to the expectation): $E(temperature|month)$. 
+
+This is what OLS does if you regress the dependent variable on dummy variables, although it usually includes an intercept. Lets check if OLS yields the same result. The month variable can be interpreted as "dummy variable" but we have to transform it to a factor variable first so that R can do it's thing under the hood. If we omit the intercept in the estimation the regression coefficients should be exactly the same.
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+# Lets first omit all the Missing values in the temperature variable and create a factor variable from 
+
+OLS_dataframe <- weather %>%
+  
+  #remove NAs
+  
+  filter(!is.na(temp)) %>%
+  
+  # lets transform the month variable into  a factor variable 
+  
+  mutate(month = factor(month))
+
+
+# Lets run the model WITHOUT the intercept
+
+model <- lm(temp ~ month + 0, data = OLS_dataframe)
+
+# Heres the model output
+summary(model)
+
+
+# this is what R does "under the hood" with factor variables when they are used in a formula
+
+model %>%
+  model.matrix() %>%
+  head()
+
+```
+
+
+Yay, the math worked... And thats a nice summary and all but not terribly useful for further wrangling steps. We could now scroll up and check if the coefficients are the same as the conditional means we calculated. But lets be a bit more thorough and do it in a "data wrangly" way. This is of course only a toy example but this workflow is super useful if you have to create tables or access your estimation coefficients for further wrangling and calculations.
+
+The broom library has some awesome features to work with model outputs. You should use it often to make your life easier:
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+model_estimation_outputs <- model %>%
+  tidy()
+
+model_estimation_outputs
+
+
+```
+
+We now have a data frame containing all the interesting estimation results. How would we now check if the results are the same? 
+
+Lets 
+
+* join the two datasets together and 
+* calculate the difference of the two estimations, 
+
+it should be zero if they are the same.
+
+We don't have the same keys in the datasets. So we have to create them.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+
+mean_temps <- weather %>%
+  
+  #Split
+  group_by(month) %>% 
+  
+  #Apply mean function and combine to variable average_temp
+  summarise(average_temp = mean(temp, na.rm=T)) %>%
+  
+  #Apply and combine to variable average_temp
+  mutate(month = paste0("month",month)) %>%
+  
+  #Join the OLS coefficients to the table
+  left_join(model_estimation_outputs, by= c("month"="term")) %>%
+  
+  #Now calculate the difference between 
+  # the split-apply-combine calcualtion and the OLS coefficients
+  mutate(difference = average_temp - estimate,
+         ratio = average_temp/estimate)
+
+
+# Lets select only the relevant columns
+mean_temps %>%
+  select(month, average_temp, estimate, difference, ratio)
+
+```
+
+
+As you can see the estimations are (virtually) the same. The differences are due to rounding errors.
+
+## Sum()
+
+A basic fact from probability theory is that the marginal distribution $f_x(x)$ of a joint density $f_{xy}(x,y)$ can be found by "integrating out" one of the variables: $f_x(x) = \int f_{x,y}(x,y) dy$. 
+
+If you are anything like me this notation is quite unintuitive. So lets fill it up with some meaning and back it up with a real life example.
+
+Remember the "tidy" remittances matrix? This object can be interpreted as a joint density of origin ($o$) and destination ($d$) tuples and their respective remittances value $f_{o,d}(o,d) = remit_{o,d}$. You can think of it it as a "lookup" function in the table if you like.
+
+
+Suppose we now want to find out how much a land recieves in total in remittances inflows.
+
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+
+cleaned_remittances
+
+```
+
+In order to find this value we have to sum (integrate) all origin countries **per** revieving country: $f_{d}(d) = \sum_{o}f_{o,d}(o,d)$
+
+The dplyr synthax for this operation is quite intuitive. We simply split the dataset by the name_d variable and sum all the respective values of the remit variable.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+
+cleaned_remittances %>%
+  
+  # split data by name_d
+  group_by(name_d) %>%
+  
+  # apply the sum function to each subset and combine the data
+  summarise(total_remit = sum(remit))
+
+```
+
+
+# Iterations and lists
+
+To be written
+
+# References

@@ -1,0 +1,65 @@
+---
+title: "Austrian Emissions"
+author: "Talis Tebecis"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(data.table)
+pacman::p_load(dplyr)
+pacman::p_load(tidyr)
+pacman::p_load(readxl)
+pacman::p_load(stringr)
+pacman::p_load(gets)
+pacman::p_load(getspanel)
+pacman::p_load(here)
+pacman::p_load(ggplot2)
+```
+
+## Austrian Emissions Exploration
+
+First, we explore the emissions per capita time series plots for all different IPCC Emissions categories.
+
+```{r}
+
+emissions_codes <- read.csv("Data/01 Source_data/IPCC 2006 Categories.csv") %>% 
+  select(IPCC, IPCC_description)
+
+data_full <- read.csv("Data/02 Intermediary_data/CO2DriversEU_dataset.csv") %>% 
+  left_join(emissions_codes,
+            by = c("category" = "IPCC")) %>% 
+  filter(!is.na(lemissions_pc))
+
+#emissions on same scale
+ggplot(data = subset(data_full, country == "Austria")) +
+  geom_line(mapping = aes(x = year, y = emissions_pc)) +
+  facet_wrap(~ IPCC_description) +
+  labs(title = "Emissions per capita for Austria",
+       xlab = "Year",
+       ylab = "Emissions per capita")
+
+```
+
+We can see here that the most important categories are:
+
+-   Main Activity Electricity and Heat Production
+
+-   Manufacturing Industries and Construction
+
+-   Petroleum Refining - Manufacture of Solid Fuels and Other Energy Industries
+
+-   Road Transportation
+
+-   "Other sources," which includes
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

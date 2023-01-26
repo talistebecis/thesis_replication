@@ -4,7 +4,6 @@ author: "Talis Tebecis"
 date: "`r Sys.Date()`"
 output:
   pdf_document: default
-  html_document: default
 ---
 
 ```{r setup, include=FALSE}

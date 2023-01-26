@@ -1,6 +1,0 @@
-"0","emissions_codes <- read.csv(""Data/01 Source_data/IPCC 2006 Categories.csv"") %>% 
-  select(IPCC, IPCC_description)
-"
-"2","Warning: cannot open file 'Data/01 Source_data/IPCC 2006 Categories.csv': No such file or directory"
-"2","Error in file(file, ""rt"") : cannot open the connection
-"
